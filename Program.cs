@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Speech.Recognition;
 
 namespace de.fhb.oll.transcripter
@@ -14,7 +15,7 @@ namespace de.fhb.oll.transcripter
         {
             // Initialize an in-process speech recognition engine.
             using (var recognizer =
-               new SpeechRecognitionEngine())
+               new SpeechRecognitionEngine(CultureInfo.GetCultureInfo("de-DE")))
             {
                 // Create and load a grammar.
                 Grammar dictation = new DictationGrammar();
@@ -23,7 +24,7 @@ namespace de.fhb.oll.transcripter
                 recognizer.LoadGrammar(dictation);
 
                 // Configure the input to the recognizer.
-                recognizer.SetInputToWaveFile(@"c:\temp\SampleWAVInput.wav");
+                recognizer.SetInputToWaveFile(@"D:\Daten\FH\OLL\Media\Audio\12.01.1 Datenstrukturen, Array, Queue, Stack.wav");
 
                 // Attach event handlers for the results of recognition.
                 recognizer.SpeechRecognized += recognizer_SpeechRecognized;
@@ -32,7 +33,7 @@ namespace de.fhb.oll.transcripter
                 // Perform recognition on the entire file.
                 Console.WriteLine("Starting asynchronous recognition...");
                 completed = false;
-                recognizer.RecognizeAsync();
+                recognizer.RecognizeAsync(RecognizeMode.Multiple);
 
                 // Keep the console window open.
                 while (!completed)
@@ -76,6 +77,7 @@ namespace de.fhb.oll.transcripter
             {
                 Console.WriteLine("  End of stream encountered.");
             }
+            Console.WriteLine("  Recognize complete.");
             completed = true;
         }
     }
