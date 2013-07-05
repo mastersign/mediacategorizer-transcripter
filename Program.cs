@@ -17,7 +17,12 @@ namespace de.fhb.oll.transcripter
     class Program
     {
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
+        
         private static readonly CultureInfo CSV_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
+        private static readonly Encoding CSV_OUTPUT_ENCODING = new UTF8Encoding(false);
+
+        private static readonly CultureInfo CLJ_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
+        private static readonly Encoding CLJ_OUTPUT_ENCODING = new UTF8Encoding(false);
 
         private const int GLOBAL_LIST_LENGTH = 10;
         private const int LOCAL_LIST_LENGTH = 5;
@@ -32,6 +37,7 @@ namespace de.fhb.oll.transcripter
 
         private static TextWriter outPhrases;
         private static TextWriter outWords;
+        private static TextWriter outClojure;
 
         static void Main(string[] args)
         {
@@ -52,24 +58,37 @@ namespace de.fhb.oll.transcripter
             Console.WriteLine();
             Console.WriteLine("Starting transcription...");
 
-            using (outPhrases = new StreamWriter(Path.ChangeExtension(sourceFile, ".csv"), false, Encoding.UTF8))
-            using (outWords = new StreamWriter(Path.ChangeExtension(sourceFile, ".words.csv"), false, Encoding.UTF8))
+            using (outPhrases = new StreamWriter(Path.ChangeExtension(sourceFile, ".csv"), false, CSV_OUTPUT_ENCODING))
+            using (outWords = new StreamWriter(Path.ChangeExtension(sourceFile, ".words.csv"), false, CSV_OUTPUT_ENCODING))
+            using (outClojure = new StreamWriter(Path.ChangeExtension(sourceFile, ".clj"), false, CLJ_OUTPUT_ENCODING))
             using (var engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE))
             {
+                BeginWriterOutput();
+
                 engine.SpeechRecognized += RecognizerSpeechRecognizedHandler;
                 engine.RecognizeCompleted += RecognizerRecognizeCompletedHandler;
 
                 Grammar dictation = new DictationGrammar();
                 dictation.Name = "Dictation Grammar";
-
                 engine.LoadGrammar(dictation);
 
                 engine.SetInputToWaveFile(sourceFile);
-
                 engine.RecognizeAsync(RecognizeMode.Multiple);
-
                 exitEvent.WaitOne();
+
+                EndWriterOutput();
             }
+        }
+
+        private static void BeginWriterOutput()
+        {
+            outClojure.WriteLine("[");
+        }
+
+        private static void EndWriterOutput()
+        {
+            outClojure.WriteLine("]");
+            outClojure.Flush();
         }
 
         private static void WriteWordStats()
@@ -92,35 +111,59 @@ namespace de.fhb.oll.transcripter
             ProcessResult(e.Result);
             WriteWordStats();
 
-            WritePhrase(e.Result);
-            WriteResultWords(e.Result);
+            WriteResult(e.Result);
 
             ShowResult(e.Result);
         }
 
-        private static void WriteResultWords(RecognitionResult result)
+        private static void WriteResult(RecognitionResult result)
         {
-            var words = new HashSet<Tuple<string, float>>(
-                result.Alternates
-                 .SelectMany(a => a.Words)
-                 .Select(w => Tuple.Create(w.Text, w.Confidence)));
-            foreach (var tuple in words)
-            {
-                outWords.WriteLine("{0}, {1}, \"{2}\"",
-                                   tuple.Item2.ToString("0.000000", CSV_OUTPUT_CULTURE),
-                                   IsNoun(tuple.Item1).ToString(CSV_OUTPUT_CULTURE),
-                                   tuple.Item1.Replace("\"", "\\\""));
-            }
-        }
-
-        private static void WritePhrase(RecognitionResult result)
-        {
+            // Phrases to CSV
             if (result.Audio == null) return;
             outPhrases.WriteLine("{0}, {1}, \"{2}\"",
                                  result.Audio.AudioPosition.ToString("G", CSV_OUTPUT_CULTURE),
                                  result.Audio.Duration.ToString("G", CSV_OUTPUT_CULTURE),
                                  result.Text.Replace("\"", "\\\""));
             outPhrases.Flush();
+
+            // Words to CSV
+            var words = new HashSet<Tuple<string, float>>(
+                result.Alternates
+                 .SelectMany(a => a.Words)
+                 .Select(w => Tuple.Create(w.Text, w.Confidence)));
+            foreach (var tuple in words)
+            {
+                outWords.WriteLine("{0}, \"{1}\"",
+                                   tuple.Item2.ToString(CSV_OUTPUT_CULTURE),
+                                   tuple.Item1.Replace("\"", "\\\""));
+            }
+
+            // All to Clojure Format
+            outClojure.WriteLine("{");
+            outClojure.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.ToString("G", CLJ_OUTPUT_CULTURE));
+            outClojure.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.ToString("G", CLJ_OUTPUT_CULTURE));
+            outClojure.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
+            outClojure.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
+            outClojure.WriteLine("  :alternates");
+            outClojure.WriteLine("    [");
+            foreach (var alternate in result.Alternates)
+            {
+                outClojure.WriteLine("      {");
+                outClojure.WriteLine("        :confidence {0},", alternate.Confidence.ToString(CLJ_OUTPUT_CULTURE));
+                outClojure.WriteLine("        :text       \"{0}\",", alternate.Text.Replace("\"", "\\\""));
+                outClojure.WriteLine("        :words");
+                outClojure.WriteLine("          [");
+                foreach (var word in result.Words)
+                {
+                    outClojure.WriteLine("            {{ :confidence {0} :text \"{1}\" }}",
+                        word.Confidence.ToString(CLJ_OUTPUT_CULTURE),
+                        word.Text.Replace("\"", "\\\""));
+                }
+                outClojure.WriteLine("          ]");
+                outClojure.WriteLine("      }");
+            }
+            outClojure.WriteLine("    ]");
+            outClojure.WriteLine("}");
         }
 
         static void RecognizerRecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
