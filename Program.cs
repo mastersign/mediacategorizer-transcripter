@@ -17,7 +17,7 @@ namespace de.fhb.oll.transcripter
     class Program
     {
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
-        
+
         private static readonly CultureInfo CSV_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
         private static readonly Encoding CSV_OUTPUT_ENCODING = new UTF8Encoding(false);
 
@@ -29,6 +29,7 @@ namespace de.fhb.oll.transcripter
 
         private static string sourceFile;
         private static string inputName;
+        private static string targetFile;
 
         private static AutoResetEvent exitEvent;
         private static double confidenceSum;
@@ -48,19 +49,26 @@ namespace de.fhb.oll.transcripter
             }
 
             sourceFile = args[0];
-            inputName = Path.GetFileNameWithoutExtension(sourceFile);
+            inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
             hitlist = new Dictionary<string, WordStats>();
             confidenceSum = 0.0;
             phraseCount = 0;
             exitEvent = new AutoResetEvent(false);
 
+            var outputPath = Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript");
+            if (!Directory.Exists(outputPath))
+            {
+                Directory.CreateDirectory(outputPath);
+            }
+            targetFile = Path.Combine(outputPath, inputName);
+
             Console.WriteLine(inputName);
             Console.WriteLine();
             Console.WriteLine("Starting transcription...");
 
-            using (outPhrases = new StreamWriter(Path.ChangeExtension(sourceFile, ".csv"), false, CSV_OUTPUT_ENCODING))
-            using (outWords = new StreamWriter(Path.ChangeExtension(sourceFile, ".words.csv"), false, CSV_OUTPUT_ENCODING))
-            using (outClojure = new StreamWriter(Path.ChangeExtension(sourceFile, ".clj"), false, CLJ_OUTPUT_ENCODING))
+            using (outPhrases = new StreamWriter(targetFile + ".phrases.csv", false, CSV_OUTPUT_ENCODING))
+            using (outWords = new StreamWriter(targetFile + ".words.csv", false, CSV_OUTPUT_ENCODING))
+            using (outClojure = new StreamWriter(targetFile + ".clj", false, CLJ_OUTPUT_ENCODING))
             using (var engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE))
             {
                 BeginWriterOutput();
@@ -93,14 +101,17 @@ namespace de.fhb.oll.transcripter
 
         private static void WriteWordStats()
         {
-            using (var outWordStats = new StreamWriter(Path.ChangeExtension(sourceFile, ".wordstats.csv"), false, Encoding.UTF8))
+            using (var outWordStats = new StreamWriter(targetFile + ".wordstats.csv", false, Encoding.UTF8))
             {
+                outWordStats.WriteLine("# Count, ConfidenceSum, SquaredConfidenceSum, MeanConfidence, MeanSquaredConfidence, Word");
                 foreach (var kvp in hitlist.OrderByDescending(kvp => kvp.Value.SquaredConfidenceSum))
                 {
-                    outWordStats.WriteLine("{0}, {1}, {2}, \"{3}\"",
+                    outWordStats.WriteLine("{0}, {1}, {2}, {3}, {4}, \"{5}\"",
                                            kvp.Value.Count.ToString(CSV_OUTPUT_CULTURE),
                                            kvp.Value.ConfidenceSum.ToString(CSV_OUTPUT_CULTURE),
                                            kvp.Value.SquaredConfidenceSum.ToString(CSV_OUTPUT_CULTURE),
+                                           kvp.Value.MeanConfidence.ToString(CSV_OUTPUT_CULTURE),
+                                           kvp.Value.MeanSquaredConfidance.ToString(CSV_OUTPUT_CULTURE),
                                            kvp.Key.Replace("\"", "\\\""));
                 }
             }
@@ -155,9 +166,11 @@ namespace de.fhb.oll.transcripter
                 outClojure.WriteLine("          [");
                 foreach (var word in result.Words)
                 {
-                    outClojure.WriteLine("            {{ :confidence {0} :text \"{1}\" }}",
+                    outClojure.WriteLine("            {{ :confidence {0} :text \"{1}\" :lexical-form \"{2}\" :pronunciation \"{3}\" }}",
                         word.Confidence.ToString(CLJ_OUTPUT_CULTURE),
-                        word.Text.Replace("\"", "\\\""));
+                        word.Text.Replace("\"", "\\\""),
+                        word.LexicalForm.Replace("\"", "\\\""),
+                        word.Pronunciation.Replace("\"", "\\\""));
                 }
                 outClojure.WriteLine("          ]");
                 outClojure.WriteLine("      }");
@@ -202,7 +215,7 @@ namespace de.fhb.oll.transcripter
             public readonly double ConfidenceSum;
             public readonly double SquaredConfidenceSum;
 
-            public WordStats(int count, double confidenceSum, double squaredConfidenceSum)
+            private WordStats(int count, double confidenceSum, double squaredConfidenceSum)
             {
                 Count = count;
                 ConfidenceSum = confidenceSum;
@@ -219,7 +232,7 @@ namespace de.fhb.oll.transcripter
 
             public double MeanConfidence { get { return ConfidenceSum / Count; } }
 
-            public double MeanSquaredConfidance { get { return SquaredConfidenceSum/Count; } }
+            public double MeanSquaredConfidance { get { return SquaredConfidenceSum / Count; } }
         }
 
         static void ProcessWord(RecognizedWordUnit word)
