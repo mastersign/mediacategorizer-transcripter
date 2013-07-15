@@ -91,6 +91,27 @@ namespace de.fhb.oll.transcripter
             }
         }
 
+        //private static Stream ExtractAudio(string file)
+        //{
+        //    var ffmpeg =
+        //        Path.Combine(
+        //            Path.GetDirectoryName(new Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath) ?? "",
+        //            "ffmpeg.exe");
+        //    if (!File.Exists(ffmpeg))
+        //    {
+        //        throw new FileNotFoundException("Could not find the ffmpeg executable.", ffmpeg);
+        //    }
+
+        //    var psi = new ProcessStartInfo(ffmpeg,
+        //        string.Format("-i \"{0}\" -n -vn -ac 1 -ar 16000 -acodec pcm_s16le pipe:1", file));
+        //    psi.RedirectStandardOutput = true;
+        //    psi.CreateNoWindow = false;
+        //    psi.UseShellExecute = false;
+            
+        //    var p = Process.Start(psi);
+        //    return p.StandardOutput.BaseStream;
+        //}
+
         private static void BeginWriterOutput()
         {
             outClojure.WriteLine("[");
