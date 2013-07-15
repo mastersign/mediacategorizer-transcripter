@@ -40,6 +40,8 @@ namespace de.fhb.oll.transcripter
         private static TextWriter outWords;
         private static TextWriter outClojure;
 
+        private static long resultNo;
+
         static void Main(string[] args)
         {
             if (args.Length < 1)
@@ -53,6 +55,7 @@ namespace de.fhb.oll.transcripter
             hitlist = new Dictionary<string, WordStats>();
             confidenceSum = 0.0;
             phraseCount = 0;
+            resultNo = 0;
             exitEvent = new AutoResetEvent(false);
 
             var outputPath = Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript");
@@ -153,30 +156,42 @@ namespace de.fhb.oll.transcripter
             outClojure.WriteLine("{");
             outClojure.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.ToString("G", CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.ToString("G", CLJ_OUTPUT_CULTURE));
+            outClojure.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
             outClojure.WriteLine("  :alternates");
             outClojure.WriteLine("    [");
+            var phraseNo = 0;
             foreach (var alternate in result.Alternates)
             {
                 outClojure.WriteLine("      {");
+                outClojure.WriteLine("        :no         {0},", phraseNo.ToString(CLJ_OUTPUT_CULTURE));
                 outClojure.WriteLine("        :confidence {0},", alternate.Confidence.ToString(CLJ_OUTPUT_CULTURE));
                 outClojure.WriteLine("        :text       \"{0}\",", alternate.Text.Replace("\"", "\\\""));
                 outClojure.WriteLine("        :words");
                 outClojure.WriteLine("          [");
+                var wordNo = 0;
                 foreach (var word in result.Words)
                 {
-                    outClojure.WriteLine("            {{ :confidence {0} :text \"{1}\" :lexical-form \"{2}\" :pronunciation \"{3}\" }}",
+                    outClojure.WriteLine("            {{ :no {0} :confidence {1} :text \"{2}\" :lexical-form \"{3}\" :pronunciation \"{4}\" }}",
+                        wordNo.ToString(CLJ_OUTPUT_CULTURE),
                         word.Confidence.ToString(CLJ_OUTPUT_CULTURE),
                         word.Text.Replace("\"", "\\\""),
                         word.LexicalForm.Replace("\"", "\\\""),
                         word.Pronunciation.Replace("\"", "\\\""));
+
+                    wordNo++;
                 }
                 outClojure.WriteLine("          ]");
                 outClojure.WriteLine("      }");
+
+                phraseNo++;
             }
             outClojure.WriteLine("    ]");
             outClojure.WriteLine("}");
+
+            // Finish result output
+            resultNo++;
         }
 
         static void RecognizerRecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
