@@ -262,6 +262,7 @@ namespace de.fhb.oll.transcripter
         static void ShowResult(RecognitionResult result)
         {
             Console.SetWindowSize(100, 16 + GLOBAL_LIST_LENGTH + LOCAL_LIST_LENGTH + 6);
+            Console.Title = inputName;
             Console.Clear();
             Console.WriteLine(inputName);
             Console.WriteLine();
