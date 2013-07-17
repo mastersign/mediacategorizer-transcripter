@@ -175,9 +175,9 @@ namespace de.fhb.oll.transcripter
 
             // All to Clojure Format
             outClojure.WriteLine("{");
+            outClojure.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.ToString("G", CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.ToString("G", CLJ_OUTPUT_CULTURE));
-            outClojure.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
             outClojure.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
             outClojure.WriteLine("  :alternates");
@@ -235,6 +235,8 @@ namespace de.fhb.oll.transcripter
 
             exitEvent.Set();
         }
+
+        #region Preview Analytics
 
         static void ProcessResult(RecognitionResult result)
         {
@@ -453,5 +455,7 @@ namespace de.fhb.oll.transcripter
                 "hundert", "tausend", "million", "milliarden", "billionen", "billiarden",
                 "hunderte", "tausende", "millionen",
             };
+
+        #endregion
     }
 }
