@@ -71,7 +71,7 @@ namespace de.fhb.oll.transcripter
 
             using (outPhrases = new StreamWriter(targetFile + ".phrases.csv", false, CSV_OUTPUT_ENCODING))
             using (outWords = new StreamWriter(targetFile + ".words.csv", false, CSV_OUTPUT_ENCODING))
-            using (outClojure = new StreamWriter(targetFile + ".clj", false, CLJ_OUTPUT_ENCODING))
+            using (outClojure = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING))
             using (var engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE))
             {
                 BeginWriterOutput();
