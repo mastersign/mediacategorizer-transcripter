@@ -17,9 +17,12 @@ namespace de.fhb.oll.transcripter
     class Program
     {
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
+        private const int MAX_ALTERNATES = 4;
 
+#if CSV
         private static readonly CultureInfo CSV_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
         private static readonly Encoding CSV_OUTPUT_ENCODING = new UTF8Encoding(false);
+#endif
 
         private static readonly CultureInfo CLJ_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
         private static readonly Encoding CLJ_OUTPUT_ENCODING = new UTF8Encoding(false);
@@ -36,9 +39,12 @@ namespace de.fhb.oll.transcripter
         private static long phraseCount;
         private static Dictionary<string, WordStats> hitlist;
 
+#if CSV
         private static TextWriter outPhrases;
         private static TextWriter outWords;
-        private static TextWriter outClojure;
+#endif
+
+        private static TextWriter outEdn;
 
         private static long resultNo;
 
@@ -69,19 +75,20 @@ namespace de.fhb.oll.transcripter
             Console.WriteLine();
             Console.WriteLine("Starting transcription...");
 
+#if CSV
             using (outPhrases = new StreamWriter(targetFile + ".phrases.csv", false, CSV_OUTPUT_ENCODING))
             using (outWords = new StreamWriter(targetFile + ".words.csv", false, CSV_OUTPUT_ENCODING))
-            using (outClojure = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING))
+#endif
+            using (outEdn = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING))
             using (var engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE))
             {
                 BeginWriterOutput();
 
+                engine.MaxAlternates = MAX_ALTERNATES;
                 engine.SpeechRecognized += RecognizerSpeechRecognizedHandler;
                 engine.RecognizeCompleted += RecognizerRecognizeCompletedHandler;
 
-                Grammar dictation = new DictationGrammar();
-                dictation.Name = "Dictation Grammar";
-                engine.LoadGrammar(dictation);
+                engine.LoadGrammar(new DictationGrammar { Name = "Dictation Grammar" });
 
                 engine.SetInputToWaveFile(sourceFile);
                 engine.RecognizeAsync(RecognizeMode.Multiple);
@@ -107,22 +114,23 @@ namespace de.fhb.oll.transcripter
         //    psi.RedirectStandardOutput = true;
         //    psi.CreateNoWindow = false;
         //    psi.UseShellExecute = false;
-            
+
         //    var p = Process.Start(psi);
         //    return p.StandardOutput.BaseStream;
         //}
 
         private static void BeginWriterOutput()
         {
-            outClojure.WriteLine("[");
+            outEdn.WriteLine("[");
         }
 
         private static void EndWriterOutput()
         {
-            outClojure.WriteLine("]");
-            outClojure.Flush();
+            outEdn.WriteLine("]");
+            outEdn.Flush();
         }
 
+#if CSV
         private static void WriteWordStats()
         {
             using (var outWordStats = new StreamWriter(targetFile + ".wordstats.csv", false, Encoding.UTF8))
@@ -140,11 +148,14 @@ namespace de.fhb.oll.transcripter
                 }
             }
         }
+#endif
 
         static void RecognizerSpeechRecognizedHandler(object sender, SpeechRecognizedEventArgs e)
         {
             ProcessResult(e.Result);
+#if CSV
             WriteWordStats();
+#endif
 
             WriteResult(e.Result);
 
@@ -153,8 +164,9 @@ namespace de.fhb.oll.transcripter
 
         private static void WriteResult(RecognitionResult result)
         {
-            // Phrases to CSV
             if (result.Audio == null) return;
+#if CSV
+            // Phrases to CSV
             outPhrases.WriteLine("{0}, {1}, \"{2}\"",
                                  result.Audio.AudioPosition.ToString("G", CSV_OUTPUT_CULTURE),
                                  result.Audio.Duration.ToString("G", CSV_OUTPUT_CULTURE),
@@ -172,47 +184,59 @@ namespace de.fhb.oll.transcripter
                                    tuple.Item2.ToString(CSV_OUTPUT_CULTURE),
                                    tuple.Item1.Replace("\"", "\\\""));
             }
+#endif
 
-            // All to Clojure Format
-            outClojure.WriteLine("{");
-            outClojure.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
-            outClojure.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.ToString("G", CLJ_OUTPUT_CULTURE));
-            outClojure.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.ToString("G", CLJ_OUTPUT_CULTURE));
-            outClojure.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
-            outClojure.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
-            outClojure.WriteLine("  :alternates");
-            outClojure.WriteLine("    [");
+            // All to EDN Format
+            outEdn.WriteLine("{");
+            outEdn.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
+            outEdn.WriteLine("  :words");
+            WriteWords(result.Words, "    ");
+#if ALTERNATES
+            outEdn.WriteLine("  :alternates");
+            outEdn.WriteLine("    [");
             var phraseNo = 0;
             foreach (var alternate in result.Alternates)
             {
-                outClojure.WriteLine("      {");
-                outClojure.WriteLine("        :no         {0},", phraseNo.ToString(CLJ_OUTPUT_CULTURE));
-                outClojure.WriteLine("        :confidence {0},", alternate.Confidence.ToString(CLJ_OUTPUT_CULTURE));
-                outClojure.WriteLine("        :text       \"{0}\",", alternate.Text.Replace("\"", "\\\""));
-                outClojure.WriteLine("        :words");
-                outClojure.WriteLine("          [");
-                var wordNo = 0;
-                foreach (var word in result.Words)
-                {
-                    outClojure.WriteLine("            {{ :no {0} :confidence {1} :text \"{2}\" :lexical-form \"{3}\" :pronunciation \"{4}\" }}",
-                        wordNo.ToString(CLJ_OUTPUT_CULTURE),
-                        word.Confidence.ToString(CLJ_OUTPUT_CULTURE),
-                        word.Text.Replace("\"", "\\\""),
-                        word.LexicalForm.Replace("\"", "\\\""),
-                        word.Pronunciation.Replace("\"", "\\\""));
-
-                    wordNo++;
-                }
-                outClojure.WriteLine("          ]");
-                outClojure.WriteLine("      }");
+                outEdn.WriteLine("      {");
+                outEdn.WriteLine("        :no         {0},", phraseNo.ToString(CLJ_OUTPUT_CULTURE));
+                outEdn.WriteLine("        :confidence {0},", alternate.Confidence.ToString(CLJ_OUTPUT_CULTURE));
+                outEdn.WriteLine("        :text       \"{0}\",", alternate.Text.Replace("\"", "\\\""));
+                outEdn.WriteLine("        :words");
+                WriteWords(alternate.Words, "            ");
+                outEdn.WriteLine("      }");
 
                 phraseNo++;
             }
-            outClojure.WriteLine("    ]");
-            outClojure.WriteLine("}");
+            outEdn.WriteLine("    ]");
+#endif
+            outEdn.WriteLine("}");
 
             // Finish result output
             resultNo++;
+        }
+
+        private static void WriteWords(IEnumerable<RecognizedWordUnit> words, string prefix)
+        {
+            var wordNo = 0;
+            outEdn.WriteLine("{0}[", prefix);
+            foreach (var word in words)
+            {
+                outEdn.WriteLine(
+                    "{0}  {{ :no {1} :confidence {2} :text \"{3}\" :lexical-form \"{4}\" :pronunciation \"{5}\" }}",
+                    prefix,
+                    wordNo.ToString(CLJ_OUTPUT_CULTURE),
+                    word.Confidence.ToString(CLJ_OUTPUT_CULTURE),
+                    word.Text.Replace("\"", "\\\""),
+                    word.LexicalForm.Replace("\"", "\\\""),
+                    word.Pronunciation.Replace("\"", "\\\""));
+
+                wordNo++;
+            }
+            outEdn.WriteLine("{0}]", prefix);
         }
 
         static void RecognizerRecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
