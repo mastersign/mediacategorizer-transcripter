@@ -189,8 +189,8 @@ namespace de.fhb.oll.transcripter
             // All to EDN Format
             outEdn.WriteLine("{");
             outEdn.WriteLine("  :no             {0},", resultNo.ToString(CLJ_OUTPUT_CULTURE));
-            outEdn.WriteLine("  :start          \"{0}\",", result.Audio.AudioPosition.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
-            outEdn.WriteLine("  :duration       \"{0}\",", result.Audio.Duration.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :start          {0},", result.Audio.AudioPosition.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
+            outEdn.WriteLine("  :duration       {0},", result.Audio.Duration.TotalSeconds.ToString(CLJ_OUTPUT_CULTURE));
             outEdn.WriteLine("  :max-confidence {0},", result.Confidence.ToString(CLJ_OUTPUT_CULTURE));
             outEdn.WriteLine("  :text           \"{0}\",", result.Text.Replace("\"", "\\\""));
             outEdn.WriteLine("  :words");
