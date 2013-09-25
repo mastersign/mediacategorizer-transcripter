@@ -19,6 +19,8 @@ namespace de.fhb.oll.transcripter
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
         private const int MAX_ALTERNATES = 4;
 
+        private const float CONFIDENCE_TEST_SECONDS = 60 * 3;
+
 #if CSV
         private static readonly CultureInfo CSV_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
         private static readonly Encoding CSV_OUTPUT_ENCODING = new UTF8Encoding(false);
@@ -35,31 +37,54 @@ namespace de.fhb.oll.transcripter
         private static string targetFile;
 
         private static AutoResetEvent exitEvent;
-        private static double confidenceSum;
+
         private static long phraseCount;
+        private static double phraseConfidenceSum;
+        private static float minPhraseConfidence = 1f;
+        private static float maxPhraseConfidence = 0f;
+        private static long wordCount;
+        private static double wordConfidenceSum;
+        private static float minWordConfidence = 1f;
+        private static float maxWordConfidence = 0f;
+
         private static Dictionary<string, WordStats> hitlist;
 
 #if CSV
         private static TextWriter outPhrases;
         private static TextWriter outWords;
 #endif
-
+        private static SpeechRecognitionEngine engine;
         private static TextWriter outEdn;
 
         private static long resultNo;
 
-        static void Main(string[] args)
+        private static ProcessingMode procMode = ProcessingMode.Default;
+        private static bool exitWithError;
+
+        static int Main(string[] args)
         {
-            if (args.Length < 1)
+            if (args.Length <= 0)
             {
                 Console.WriteLine("You need to specify a filename.");
-                return;
+                return -1;
             }
 
-            sourceFile = args[0];
+            if (args.Length >= 2)
+            {
+                if (args.Contains("-ct"))
+                {
+                    procMode = ProcessingMode.ConfidenceTest;
+                }
+                if (args.Contains("-po"))
+                {
+                    procMode = ProcessingMode.ProgressOnly;
+                }
+            }
+
+            sourceFile = args[args.Length - 1];
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
             hitlist = new Dictionary<string, WordStats>();
-            confidenceSum = 0.0;
+            phraseConfidenceSum = 0.0;
             phraseCount = 0;
             resultNo = 0;
             exitEvent = new AutoResetEvent(false);
@@ -71,31 +96,45 @@ namespace de.fhb.oll.transcripter
             }
             targetFile = Path.Combine(outputPath, inputName);
 
-            Console.WriteLine(inputName);
-            Console.WriteLine();
-            Console.WriteLine("Starting transcription...");
-
+            if (procMode == ProcessingMode.Default)
+            {
+                Console.WriteLine(inputName);
+                Console.WriteLine();
+                Console.WriteLine("Starting transcription...");
+            }
 #if CSV
             using (outPhrases = new StreamWriter(targetFile + ".phrases.csv", false, CSV_OUTPUT_ENCODING))
             using (outWords = new StreamWriter(targetFile + ".words.csv", false, CSV_OUTPUT_ENCODING))
 #endif
-            using (outEdn = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING))
-            using (var engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE))
+            engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE);
+
+            if (procMode != ProcessingMode.ConfidenceTest)
             {
+                outEdn = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING);
                 BeginWriterOutput();
-
-                engine.MaxAlternates = MAX_ALTERNATES;
-                engine.SpeechRecognized += RecognizerSpeechRecognizedHandler;
-                engine.RecognizeCompleted += RecognizerRecognizeCompletedHandler;
-
-                engine.LoadGrammar(new DictationGrammar { Name = "Dictation Grammar" });
-
-                engine.SetInputToWaveFile(sourceFile);
-                engine.RecognizeAsync(RecognizeMode.Multiple);
-                exitEvent.WaitOne();
-
-                EndWriterOutput();
             }
+
+            engine.MaxAlternates = MAX_ALTERNATES;
+            engine.SpeechRecognized += SpeechRecognizedHandler;
+            engine.RecognizeCompleted += RecognizeCompletedHandler;
+
+            engine.LoadGrammar(new DictationGrammar { Name = "Dictation Grammar" });
+
+            engine.SetInputToWaveFile(sourceFile);
+            engine.RecognizeAsync(RecognizeMode.Multiple);
+            exitEvent.WaitOne();
+
+            if (procMode != ProcessingMode.ConfidenceTest)
+            {
+                EndWriterOutput();
+                outEdn.Dispose();
+            }
+            if (procMode == ProcessingMode.ConfidenceTest)
+            {
+                WriteConfidenceTestResults();
+            }
+
+            return exitWithError ? -1 : 0;
         }
 
         //private static Stream ExtractAudio(string file)
@@ -150,16 +189,26 @@ namespace de.fhb.oll.transcripter
         }
 #endif
 
-        static void RecognizerSpeechRecognizedHandler(object sender, SpeechRecognizedEventArgs e)
+        static void SpeechRecognizedHandler(object sender, SpeechRecognizedEventArgs e)
         {
             ProcessResult(e.Result);
+
+            if (procMode != ProcessingMode.ConfidenceTest)
+            {
 #if CSV
-            WriteWordStats();
+                WriteWordStats();
 #endif
+                WriteResult(e.Result);
 
-            WriteResult(e.Result);
+                ShowResult(e.Result);
+            }
 
-            ShowResult(e.Result);
+            if (procMode == ProcessingMode.ConfidenceTest &&
+                e.Result != null && e.Result.Audio != null &&
+                (e.Result.Audio.AudioPosition + e.Result.Audio.Duration).TotalSeconds >= CONFIDENCE_TEST_SECONDS)
+            {
+                engine.RecognizeAsyncCancel();
+            }
         }
 
         private static void WriteResult(RecognitionResult result)
@@ -239,33 +288,41 @@ namespace de.fhb.oll.transcripter
             outEdn.WriteLine("{0}]", prefix);
         }
 
-        static void RecognizerRecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
+        static void RecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
         {
-            Console.Clear();
-            if (e.Error != null)
+            if (procMode == ProcessingMode.Default)
             {
-                Console.WriteLine("Error encountered, {0}: {1}",
-                e.Error.GetType().Name, e.Error.Message);
+                Console.Clear();
+                if (e.Error != null)
+                {
+                    Console.WriteLine("Error encountered, {0}: {1}",
+                        e.Error.GetType().Name, e.Error.Message);
+                }
+                if (e.Cancelled)
+                {
+                    Console.WriteLine("Operation cancelled.");
+                }
+                if (e.InputStreamEnded)
+                {
+                    Console.WriteLine("End of stream encountered.");
+                }
+                Console.WriteLine("Recognize complete.");
             }
-            if (e.Cancelled)
-            {
-                Console.WriteLine("Operation cancelled.");
-            }
-            if (e.InputStreamEnded)
-            {
-                Console.WriteLine("End of stream encountered.");
-            }
-            Console.WriteLine("Recognize complete.");
+
+            exitWithError = e.Error != null;
 
             exitEvent.Set();
         }
 
         #region Preview Analytics
 
-        static void ProcessResult(RecognitionResult result)
+        static void ProcessResult(RecognizedPhrase result)
         {
-            confidenceSum += result.Confidence;
             phraseCount++;
+            phraseConfidenceSum += result.Confidence;
+            minPhraseConfidence = Math.Min(minPhraseConfidence, result.Confidence);
+            maxPhraseConfidence = Math.Max(maxPhraseConfidence, result.Confidence);
+
             foreach (var word in result.Words) ProcessWord(word);
         }
 
@@ -299,6 +356,10 @@ namespace de.fhb.oll.transcripter
 
         static void ProcessWord(RecognizedWordUnit word)
         {
+            wordCount++;
+            wordConfidenceSum += word.Confidence;
+            minWordConfidence = Math.Min(minWordConfidence, word.Confidence);
+            maxWordConfidence = Math.Max(maxWordConfidence, word.Confidence);
             if (!IsNoun(word.Text)) return;
             var key = word.Text; //.ToLower(CULTURE);
             WordStats stat;
@@ -308,13 +369,22 @@ namespace de.fhb.oll.transcripter
 
         static void ShowResult(RecognitionResult result)
         {
-            Console.SetWindowSize(100, 16 + GLOBAL_LIST_LENGTH + LOCAL_LIST_LENGTH + 6);
             Console.Title = inputName;
+            if (procMode == ProcessingMode.ProgressOnly)
+            {
+                if (result.Audio != null)
+                {
+                    Console.WriteLine(result.Audio.AudioPosition.TotalSeconds
+                        .ToString(CultureInfo.InvariantCulture));
+                }
+                return;
+            }
+            Console.SetWindowSize(100, 16 + GLOBAL_LIST_LENGTH + LOCAL_LIST_LENGTH + 6);
             Console.Clear();
             Console.WriteLine(inputName);
             Console.WriteLine();
             Console.WriteLine("Global:");
-            WriteConfidence("  Confidence", confidenceSum / phraseCount);
+            WriteConfidence("  Confidence", phraseConfidenceSum / phraseCount);
             Console.WriteLine();
             Console.WriteLine("  Hitlist:");
             var hits = hitlist
@@ -371,6 +441,34 @@ namespace de.fhb.oll.transcripter
             var n = (int)Math.Round(w * value);
             var bar = "".PadRight(n, '#').PadRight(w);
             Console.WriteLine("{0}: |{1}| {2:00.0 %}", label, bar, value);
+        }
+
+        static void WriteConfidenceTestResults()
+        {
+            var fp = CultureInfo.InvariantCulture;
+            // phrase count
+            Console.WriteLine(phraseCount.ToString(fp));
+            // phrase confidence sum
+            Console.WriteLine(phraseConfidenceSum.ToString(fp));
+            // max phrase confidence
+            Console.WriteLine(maxPhraseConfidence.ToString(fp));
+            // mean phrase confidence
+            Console.WriteLine((phraseCount > 0 ? phraseConfidenceSum / phraseCount : 0.0).ToString(fp));
+            // min phrase confidence
+            Console.WriteLine(minPhraseConfidence.ToString(fp));
+            // word count
+            Console.WriteLine(wordCount.ToString(fp));
+            // word confidence sum
+            Console.WriteLine(wordConfidenceSum.ToString(fp));
+            // max word confidence
+            Console.WriteLine(maxWordConfidence.ToString(fp));
+            // mean word confidence
+            Console.WriteLine((wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
+            // min word confidence
+            Console.WriteLine(minWordConfidence.ToString(fp));
+
+            // mean confidence of best phrase
+            Console.WriteLine(hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
         }
 
         private static bool IsNoun(string word)
@@ -481,5 +579,12 @@ namespace de.fhb.oll.transcripter
             };
 
         #endregion
+    }
+
+    enum ProcessingMode
+    {
+        Default,
+        ProgressOnly,
+        ConfidenceTest
     }
 }
