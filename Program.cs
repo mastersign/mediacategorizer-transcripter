@@ -19,8 +19,6 @@ namespace de.fhb.oll.transcripter
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
         private const int MAX_ALTERNATES = 4;
 
-        private const float CONFIDENCE_TEST_SECONDS = 60 * 3;
-
 #if CSV
         private static readonly CultureInfo CSV_OUTPUT_CULTURE = CultureInfo.InvariantCulture;
         private static readonly Encoding CSV_OUTPUT_ENCODING = new UTF8Encoding(false);
@@ -38,6 +36,7 @@ namespace de.fhb.oll.transcripter
 
         private static AutoResetEvent exitEvent;
 
+        private static float confidenceTestDuration = 3 * 60;
         private static long phraseCount;
         private static double phraseConfidenceSum;
         private static float minPhraseConfidence = 1f;
@@ -69,32 +68,41 @@ namespace de.fhb.oll.transcripter
                 return -1;
             }
 
-            if (args.Length >= 2)
+            if (CheckArgumentSwitch(args, "-ct", "--confidence-test"))
             {
-                if (args.Contains("-ct"))
+                procMode = ProcessingMode.ConfidenceTest;
+            }
+            if (CheckArgumentSwitch(args, "-po", "--progress-only"))
+            {
+                procMode = ProcessingMode.ProgressOnly;
+            }
+
+            var testDurationStr = GetArgumentOption(args, "-td", "--test-duration");
+            if (testDurationStr != null)
+            {
+                float testDuration;
+                if (float.TryParse(testDurationStr, NumberStyles.Float, CultureInfo.InvariantCulture, out testDuration)
+                    && testDuration > 0)
                 {
-                    procMode = ProcessingMode.ConfidenceTest;
-                }
-                if (args.Contains("-po"))
-                {
-                    procMode = ProcessingMode.ProgressOnly;
+                    confidenceTestDuration = testDuration;
                 }
             }
 
             sourceFile = args[args.Length - 1];
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
+            targetFile = GetArgumentOption(args, "-t", "--target")
+                ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName);
+            var outputPath = Path.GetDirectoryName(targetFile);
+            if (outputPath != null && !Directory.Exists(outputPath))
+            {
+                Directory.CreateDirectory(outputPath);
+            }
+
             hitlist = new Dictionary<string, WordStats>();
             phraseConfidenceSum = 0.0;
             phraseCount = 0;
             resultNo = 0;
             exitEvent = new AutoResetEvent(false);
-
-            var outputPath = Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript");
-            if (!Directory.Exists(outputPath))
-            {
-                Directory.CreateDirectory(outputPath);
-            }
-            targetFile = Path.Combine(outputPath, inputName);
 
             if (procMode == ProcessingMode.Default)
             {
@@ -157,6 +165,24 @@ namespace de.fhb.oll.transcripter
         //    var p = Process.Start(psi);
         //    return p.StandardOutput.BaseStream;
         //}
+        private static bool CheckArgumentSwitch(string[] args, params string[] switchNames)
+        {
+            return switchNames.Any(args.Contains);
+        }
+
+        private static string GetArgumentOption(string[] args, params string[] argumentNames)
+        {
+            var pos = -1;
+            for (var i = 0; i < args.Length; i++)
+            {
+                if (argumentNames.Any(an => string.Equals(an, args[i])))
+                {
+                    pos = i;
+                    break;
+                }
+            }
+            return pos >= 0 && args.Length > ++pos ? args[++pos] : null;
+        }
 
         private static void BeginWriterOutput()
         {
@@ -205,7 +231,7 @@ namespace de.fhb.oll.transcripter
 
             if (procMode == ProcessingMode.ConfidenceTest &&
                 e.Result != null && e.Result.Audio != null &&
-                (e.Result.Audio.AudioPosition + e.Result.Audio.Duration).TotalSeconds >= CONFIDENCE_TEST_SECONDS)
+                (e.Result.Audio.AudioPosition + e.Result.Audio.Duration).TotalSeconds >= confidenceTestDuration)
             {
                 engine.RecognizeAsyncCancel();
             }
