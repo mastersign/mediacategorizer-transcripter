@@ -60,6 +60,27 @@ namespace de.fhb.oll.transcripter
         private static ProcessingMode procMode = ProcessingMode.Default;
         private static bool exitWithError;
 
+        /// <remarks>
+        /// <para>
+        /// Usage <c>Transcripter.exe [options] &lt;source file&gt;</c>
+        /// </para>
+        /// <para>
+        /// <c>--confidence-test</c>, <c>-ct</c>:
+        ///     switches to confidence test mode
+        /// </para>
+        /// <para>
+        /// <c>--test-duration</c>, <c>-td &lt;seconds&gt;</c>:
+        ///     specifies the max time of confidence testing in seconds
+        /// </para>
+        /// <para>
+        /// <c>--progress-only</c>, <c>-po</c>:
+        ///     switches to normal processing with progress-only output
+        /// </para>
+        /// <para>
+        /// <c>--target</c>, <c>-t &lt;target file&gt;</c>:
+        ///     specifies the path to the result file
+        /// </para>
+        /// </remarks>
         static int Main(string[] args)
         {
             if (args.Length <= 0)
