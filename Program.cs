@@ -344,29 +344,18 @@ namespace de.fhb.oll.transcripter
         static void WriteConfidenceTestResults()
         {
             var fp = CultureInfo.InvariantCulture;
-            // phrase count
             Console.WriteLine("PhraseCount=" + phraseCount.ToString(fp));
-            // phrase confidence sum
             Console.WriteLine("PhraseConfidenceSum=" + phraseConfidenceSum.ToString(fp));
-            // max phrase confidence
             Console.WriteLine("MaxPhraseConfidence=" + maxPhraseConfidence.ToString(fp));
-            // mean phrase confidence
-            Console.WriteLine((phraseCount > 0 ? phraseConfidenceSum / phraseCount : 0.0).ToString(fp));
-            // min phrase confidence
-            Console.WriteLine(minPhraseConfidence.ToString(fp));
-            // word count
-            Console.WriteLine(wordCount.ToString(fp));
-            // word confidence sum
-            Console.WriteLine(wordConfidenceSum.ToString(fp));
-            // max word confidence
-            Console.WriteLine(maxWordConfidence.ToString(fp));
-            // mean word confidence
-            Console.WriteLine((wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
-            // min word confidence
-            Console.WriteLine(minWordConfidence.ToString(fp));
+            Console.WriteLine("MeanPhraseConfidence=" + (phraseCount > 0 ? phraseConfidenceSum / phraseCount : 0.0).ToString(fp));
+            Console.WriteLine("MinPhraseConfidence=" + minPhraseConfidence.ToString(fp));
+            Console.WriteLine("WordCount=" + wordCount.ToString(fp));
+            Console.WriteLine("WordConfidenceSum=" + wordConfidenceSum.ToString(fp));
+            Console.WriteLine("MaxWordConfidence=" + maxWordConfidence.ToString(fp));
+            Console.WriteLine("MeanWordConfidence=" + (wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
+            Console.WriteLine("MinWordConfidence=" + minWordConfidence.ToString(fp));
 
-            // mean confidence of best phrase
-            Console.WriteLine(hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
+            Console.WriteLine("BestPhraseConfidence=" + hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
         }
 
         #region Preview Analytics
