@@ -166,26 +166,6 @@ namespace de.fhb.oll.transcripter
             return exitWithError ? -1 : 0;
         }
 
-        //private static Stream ExtractAudio(string file)
-        //{
-        //    var ffmpeg =
-        //        Path.Combine(
-        //            Path.GetDirectoryName(new Uri(System.Reflection.Assembly.GetExecutingAssembly().CodeBase).LocalPath) ?? "",
-        //            "ffmpeg.exe");
-        //    if (!File.Exists(ffmpeg))
-        //    {
-        //        throw new FileNotFoundException("Could not find the ffmpeg executable.", ffmpeg);
-        //    }
-
-        //    var psi = new ProcessStartInfo(ffmpeg,
-        //        string.Format("-i \"{0}\" -n -vn -ac 1 -ar 16000 -acodec pcm_s16le pipe:1", file));
-        //    psi.RedirectStandardOutput = true;
-        //    psi.CreateNoWindow = false;
-        //    psi.UseShellExecute = false;
-
-        //    var p = Process.Start(psi);
-        //    return p.StandardOutput.BaseStream;
-        //}
         private static bool CheckArgumentSwitch(string[] args, params string[] switchNames)
         {
             return switchNames.Any(args.Contains);
@@ -361,6 +341,34 @@ namespace de.fhb.oll.transcripter
             exitEvent.Set();
         }
 
+        static void WriteConfidenceTestResults()
+        {
+            var fp = CultureInfo.InvariantCulture;
+            // phrase count
+            Console.WriteLine("PhraseCount=" + phraseCount.ToString(fp));
+            // phrase confidence sum
+            Console.WriteLine("PhraseConfidenceSum=" + phraseConfidenceSum.ToString(fp));
+            // max phrase confidence
+            Console.WriteLine("MaxPhraseConfidence=" + maxPhraseConfidence.ToString(fp));
+            // mean phrase confidence
+            Console.WriteLine((phraseCount > 0 ? phraseConfidenceSum / phraseCount : 0.0).ToString(fp));
+            // min phrase confidence
+            Console.WriteLine(minPhraseConfidence.ToString(fp));
+            // word count
+            Console.WriteLine(wordCount.ToString(fp));
+            // word confidence sum
+            Console.WriteLine(wordConfidenceSum.ToString(fp));
+            // max word confidence
+            Console.WriteLine(maxWordConfidence.ToString(fp));
+            // mean word confidence
+            Console.WriteLine((wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
+            // min word confidence
+            Console.WriteLine(minWordConfidence.ToString(fp));
+
+            // mean confidence of best phrase
+            Console.WriteLine(hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
+        }
+
         #region Preview Analytics
 
         static void ProcessResult(RecognizedPhrase result)
@@ -490,34 +498,6 @@ namespace de.fhb.oll.transcripter
             Console.WriteLine("{0}: |{1}| {2:00.0 %}", label, bar, value);
         }
 
-        static void WriteConfidenceTestResults()
-        {
-            var fp = CultureInfo.InvariantCulture;
-            // phrase count
-            Console.WriteLine(phraseCount.ToString(fp));
-            // phrase confidence sum
-            Console.WriteLine(phraseConfidenceSum.ToString(fp));
-            // max phrase confidence
-            Console.WriteLine(maxPhraseConfidence.ToString(fp));
-            // mean phrase confidence
-            Console.WriteLine((phraseCount > 0 ? phraseConfidenceSum / phraseCount : 0.0).ToString(fp));
-            // min phrase confidence
-            Console.WriteLine(minPhraseConfidence.ToString(fp));
-            // word count
-            Console.WriteLine(wordCount.ToString(fp));
-            // word confidence sum
-            Console.WriteLine(wordConfidenceSum.ToString(fp));
-            // max word confidence
-            Console.WriteLine(maxWordConfidence.ToString(fp));
-            // mean word confidence
-            Console.WriteLine((wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
-            // min word confidence
-            Console.WriteLine(minWordConfidence.ToString(fp));
-
-            // mean confidence of best phrase
-            Console.WriteLine(hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
-        }
-
         private static bool IsNoun(string word)
         {
             if (word == null) return false;
@@ -530,100 +510,100 @@ namespace de.fhb.oll.transcripter
         }
 
         static readonly HashSet<string> BLACKLIST = new HashSet<string>
-            {
-                ".", ",", "!", "?", ":", ";",
-                "der", "die", "das", "des", "dieser", "diese", "dieses", "diesen", "diesem", 
-                "dass",
-                "den", "dem", "denen",
-                "jenes", "jene", "jener", "derjenige", "diejenige", "dasjenige",
-                "sein", "seiner", "seine", "seines", "seinen", "seinem",
-                "ihr", "ihrer", "ihres", "ihren", "ihrem",
-                "deren",
-                "etwas", "jemand", "jemandem", "jemandes",
-                "jede", "jeder", "jedes", "alle",
-                "kein", "keine", "keiner", "keines", 
-                "niemand", "niemanden", "niemandes",
-                "derselbe", "dieselbe", "dasselbe",
-                "ich", "du", "er", "sie", "es", "wir", "ihr", "sie",
-                "mein", "dein", "sein", "ihr", "uns", "euch",
-                "meiner", "deiner", "seiner", "ihrer", "unser", "euerer",
-                "meine", "deine", "ihre", "seine", "unsere", "eure",
-                "meines", "meins", "deines", "ihres", "ihrs", "seines", "seins", "unseres", "unsers", "eures", "euers",
-                "meinen", "deinen", "seinen", "ihren", "euren",
-                "meinem", "deinem", "seinem", "ihrem", "eurem",
-                "mir", "dir", "ihm", "ihr", "uns", "euch", "ihnen",
-                "mich", "dich", "ihn",
-                "sich", "man",
-                "ein", "einer", "eine", "eines", "einen", "einem",
-                "mancher", "manche", "manches",
-                "wer", "wen", "wem", "welche", "welcher", "wessen",
-                "was", "welchen", "welches",
-                "warum", "weshalb", "weswegen",
-                "wie", "wieso", "so",
-                "wo", "wofür", "wozu", "womit", "wodurch", "worum", "worüber", "wohin", "woher",
-                "da", "dafür", "dazu", "damit", "dadurch", "darum", "darüber", "dahin", "daher",
-                "woran", "worin", "worauf", "worunter", "wovor", "wohinter",
-                "daran", "darin", "darauf", "darunter", "davor", "dahinter",
-                "wann", "dann", "wenn",
+        {
+            ".", ",", "!", "?", ":", ";",
+            "der", "die", "das", "des", "dieser", "diese", "dieses", "diesen", "diesem", 
+            "dass",
+            "den", "dem", "denen",
+            "jenes", "jene", "jener", "derjenige", "diejenige", "dasjenige",
+            "sein", "seiner", "seine", "seines", "seinen", "seinem",
+            "ihr", "ihrer", "ihres", "ihren", "ihrem",
+            "deren",
+            "etwas", "jemand", "jemandem", "jemandes",
+            "jede", "jeder", "jedes", "alle",
+            "kein", "keine", "keiner", "keines", 
+            "niemand", "niemanden", "niemandes",
+            "derselbe", "dieselbe", "dasselbe",
+            "ich", "du", "er", "sie", "es", "wir", "ihr", "sie",
+            "mein", "dein", "sein", "ihr", "uns", "euch",
+            "meiner", "deiner", "seiner", "ihrer", "unser", "euerer",
+            "meine", "deine", "ihre", "seine", "unsere", "eure",
+            "meines", "meins", "deines", "ihres", "ihrs", "seines", "seins", "unseres", "unsers", "eures", "euers",
+            "meinen", "deinen", "seinen", "ihren", "euren",
+            "meinem", "deinem", "seinem", "ihrem", "eurem",
+            "mir", "dir", "ihm", "ihr", "uns", "euch", "ihnen",
+            "mich", "dich", "ihn",
+            "sich", "man",
+            "ein", "einer", "eine", "eines", "einen", "einem",
+            "mancher", "manche", "manches",
+            "wer", "wen", "wem", "welche", "welcher", "wessen",
+            "was", "welchen", "welches",
+            "warum", "weshalb", "weswegen",
+            "wie", "wieso", "so",
+            "wo", "wofür", "wozu", "womit", "wodurch", "worum", "worüber", "wohin", "woher",
+            "da", "dafür", "dazu", "damit", "dadurch", "darum", "darüber", "dahin", "daher",
+            "woran", "worin", "worauf", "worunter", "wovor", "wohinter",
+            "daran", "darin", "darauf", "darunter", "davor", "dahinter",
+            "wann", "dann", "wenn",
 
-                "am", "auf", "außer", "bei", "gegenüber", "vor", "hinter", "in", "für", 
-                "neben", "zwischen", "an", "zu", "mit", "durch", "über", "unter",
-                "über", "zur", "zum", "von", "gegen", "nur", "voran", "nach", "wegen", "nach",
-                "abseits", "außerhalb", "diesseits", "innerhalb", "inmitten", "entlang", 
-                "jenseits", "längs", "oberhalb", "unterhalb", "unweit", "unterm", "überm",
-                "ab", "bis", "binnen", "seit", "während",
-                "angesichts", "anlässlich", "aufgrund", "aus", "betreffs", "bezüglich",
-                "durch", "gemäß", "halber", "infolge", "mangels", "mittels", "ob",
-                "seitens", "trotz", "um", "ungeachtet", "vermöge", "wegen", "zufolge",
-                "zwecks", "abzüglich", "ausschließlich", "außer", "einschließlich", "entgegen", 
-                "exklusive", "inklusive", "mitsamt", "nebst", "ohne", "statt", "anstatt", "wieder", 
-                "zuwider", "zuzüglich", "weil", "deshalb", "sogar", "doch", "nicht", "nichts", "direkt", "indirekt",
-                "und", "oder", "aber", "hier", "da", "oben", "unten", "hinten", "vorn", "vorne", 
-                "seitlich", "seitwärts", "umgekehrt", "auch", "ganz", "halb",
-                "immer", "niemals", "ständig", "noch", "jetzt", "mal", "gut", "schlecht", "immer", "wieder",
-                "oft", "öfter", "mehrfach", "wiederholt", "als", "sehr", "obwohl", "obschon",
-                "klar", "unklar", "vollständig", "unvollständig", "noch", "fast", "kaum", "nie", 
+            "am", "auf", "außer", "bei", "gegenüber", "vor", "hinter", "in", "für", 
+            "neben", "zwischen", "an", "zu", "mit", "durch", "über", "unter",
+            "über", "zur", "zum", "von", "gegen", "nur", "voran", "nach", "wegen", "nach",
+            "abseits", "außerhalb", "diesseits", "innerhalb", "inmitten", "entlang", 
+            "jenseits", "längs", "oberhalb", "unterhalb", "unweit", "unterm", "überm",
+            "ab", "bis", "binnen", "seit", "während",
+            "angesichts", "anlässlich", "aufgrund", "aus", "betreffs", "bezüglich",
+            "durch", "gemäß", "halber", "infolge", "mangels", "mittels", "ob",
+            "seitens", "trotz", "um", "ungeachtet", "vermöge", "wegen", "zufolge",
+            "zwecks", "abzüglich", "ausschließlich", "außer", "einschließlich", "entgegen", 
+            "exklusive", "inklusive", "mitsamt", "nebst", "ohne", "statt", "anstatt", "wieder", 
+            "zuwider", "zuzüglich", "weil", "deshalb", "sogar", "doch", "nicht", "nichts", "direkt", "indirekt",
+            "und", "oder", "aber", "hier", "da", "oben", "unten", "hinten", "vorn", "vorne", 
+            "seitlich", "seitwärts", "umgekehrt", "auch", "ganz", "halb",
+            "immer", "niemals", "ständig", "noch", "jetzt", "mal", "gut", "schlecht", "immer", "wieder",
+            "oft", "öfter", "mehrfach", "wiederholt", "als", "sehr", "obwohl", "obschon",
+            "klar", "unklar", "vollständig", "unvollständig", "noch", "fast", "kaum", "nie", 
 
-                "andere", "anderer", "anderes", "anderen",
-                "groß", "größer", "größte", "größere", "größeres", "größeren", "größerem", "größter", "größte", "größtes", "größten", "größtem",
-                "klein", "kleiner", "kleinere", "kleinerer", "kleineres", "kleineren", "kleinerem", "kleinster", "kleinstes", "kleinste", "kleinsten", "kleinstem",
-                "spät", "später", "spätestens",
-                "früh", "früher", "frühestens",
-                "gleich", "gleiche", "gleicher", "gleiches", "gleichen", "gleichem",
-                "mehr", "mehrere", "mehreren", "mehrerem",
-                "weniger", "wenigstens", "wenigster", "wenigste", "wenigstes", "wenigesten", "wenigestem",
-                "alle", "aller", "alles", "allen", "allem",
-                "kurz", "kürzer", "kürzester", "kürzeste", "kürstestes", "kürzesten", "kürzestem",
-                "lang", "länger", "längster", "längste", "längstes", "längsten", "längstem",
-                "solch", "solche", "solcher", "solches", "solchen", "solchem",
-                "jeder", "jede", "jedes", "jeden", "jedem",
+            "andere", "anderer", "anderes", "anderen",
+            "groß", "größer", "größte", "größere", "größeres", "größeren", "größerem", "größter", "größte", "größtes", "größten", "größtem",
+            "klein", "kleiner", "kleinere", "kleinerer", "kleineres", "kleineren", "kleinerem", "kleinster", "kleinstes", "kleinste", "kleinsten", "kleinstem",
+            "spät", "später", "spätestens",
+            "früh", "früher", "frühestens",
+            "gleich", "gleiche", "gleicher", "gleiches", "gleichen", "gleichem",
+            "mehr", "mehrere", "mehreren", "mehrerem",
+            "weniger", "wenigstens", "wenigster", "wenigste", "wenigstes", "wenigesten", "wenigestem",
+            "alle", "aller", "alles", "allen", "allem",
+            "kurz", "kürzer", "kürzester", "kürzeste", "kürstestes", "kürzesten", "kürzestem",
+            "lang", "länger", "längster", "längste", "längstes", "längsten", "längstem",
+            "solch", "solche", "solcher", "solches", "solchen", "solchem",
+            "jeder", "jede", "jedes", "jeden", "jedem",
 
-                "seien", "sein", "bin", "ist", "sind", "war", "waren", "wäre", "wären",
-                "werden", "bin", "seid", "wurde", "wurden", "würde", "würden", "wird", "werdet", "werde",
-                "worden", "geworden",
-                "hat", "haben", "hatte", "hatten", "habe", "hätte", "hätten",
-                "kann", "können", "konnte", "konnten", "könnte", "könnten",
-                "mag", "mögen", "mochte", "mochten", 
-                "will", "wollen", "wollte", "wollten",
-                "soll", "sollen", "sollte", "sollten",
-                "muss", "müssen", "musste", "mussten",
-                "gebe", "gibt", "geben", "gebt", "gab", "gaben",
-                "kommen", "komme", "kommt", "kommen", "kam", "kamen",
-                "gehen", "gehe", "geht", "gehen", "ging", "gingen",
-                "machen", "mache", "macht", "machte", "machten",
+            "seien", "sein", "bin", "ist", "sind", "war", "waren", "wäre", "wären",
+            "werden", "bin", "seid", "wurde", "wurden", "würde", "würden", "wird", "werdet", "werde",
+            "worden", "geworden",
+            "hat", "haben", "hatte", "hatten", "habe", "hätte", "hätten",
+            "kann", "können", "konnte", "konnten", "könnte", "könnten",
+            "mag", "mögen", "mochte", "mochten", 
+            "will", "wollen", "wollte", "wollten",
+            "soll", "sollen", "sollte", "sollten",
+            "muss", "müssen", "musste", "mussten",
+            "gebe", "gibt", "geben", "gebt", "gab", "gaben",
+            "kommen", "komme", "kommt", "kommen", "kam", "kamen",
+            "gehen", "gehe", "geht", "gehen", "ging", "gingen",
+            "machen", "mache", "macht", "machte", "machten",
 
-                "null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn",
-                "elf", "zwölf", "zwanzig", "dreißig", "vierzig", "fünfzig", "sechzig", "siebzig", "achtzig", "neunzig",
-                "nullmal", "einmal", "zweimal", "dreimal", "viermal", "fünfmal", "sechsmal", "siebenmal", "achtmahl", "neunmahl", "zehnmal",
-                "erste", "zweite", "dritte", "vierte", "fünfte", "sechste", "siebte", "achte", "neunte", "zehnte",
-                "erster", "zweiter", "dritter", "vierter", "fünfter", "sechster", "siebter", "achter", "neunter", "zehnter",
-                "erstes", "zweites", "drittes", "viertes", "fünftes", "sechstes", "siebtes", "achtes", "neuntes", "zehntes",
-                "ersten", "zweiten", "dritten", "vierten", "fünften", "sechsten", "siebten", "achten", "neunten", "zehnten",
-                "erstem", "zweitem", "drittem", "viertem", "fünftem", "sechstem", "siebtem", "achtem", "neuntem", "zehntem",
-                "hälfte", "drittel", "viertel", "fünftel", "sechstel", "siebtel", "achtel", "neuntel", "zehntel",
-                "hundert", "tausend", "million", "milliarden", "billionen", "billiarden",
-                "hunderte", "tausende", "millionen",
-            };
+            "null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun", "zehn",
+            "elf", "zwölf", "zwanzig", "dreißig", "vierzig", "fünfzig", "sechzig", "siebzig", "achtzig", "neunzig",
+            "nullmal", "einmal", "zweimal", "dreimal", "viermal", "fünfmal", "sechsmal", "siebenmal", "achtmahl", "neunmahl", "zehnmal",
+            "erste", "zweite", "dritte", "vierte", "fünfte", "sechste", "siebte", "achte", "neunte", "zehnte",
+            "erster", "zweiter", "dritter", "vierter", "fünfter", "sechster", "siebter", "achter", "neunter", "zehnter",
+            "erstes", "zweites", "drittes", "viertes", "fünftes", "sechstes", "siebtes", "achtes", "neuntes", "zehntes",
+            "ersten", "zweiten", "dritten", "vierten", "fünften", "sechsten", "siebten", "achten", "neunten", "zehnten",
+            "erstem", "zweitem", "drittem", "viertem", "fünftem", "sechstem", "siebtem", "achtem", "neuntem", "zehntem",
+            "hälfte", "drittel", "viertel", "fünftel", "sechstel", "siebtel", "achtel", "neuntel", "zehntel",
+            "hundert", "tausend", "million", "milliarden", "billionen", "billiarden",
+            "hunderte", "tausende", "millionen",
+        };
 
         #endregion
     }
