@@ -36,7 +36,7 @@ namespace de.fhb.oll.transcripter
 
         private static AutoResetEvent exitEvent;
 
-        private static float confidenceTestDuration = 3 * 60;
+        private static double confidenceTestDuration = 3 * 60;
         private static long phraseCount;
         private static double phraseConfidenceSum;
         private static float minPhraseConfidence = 1f;
@@ -58,6 +58,8 @@ namespace de.fhb.oll.transcripter
         private static long resultNo;
 
         private static ProcessingMode procMode = ProcessingMode.Default;
+        private static bool showDashboard;
+        private static bool showProgress;
         private static bool exitWithError;
 
         /// <remarks>
@@ -65,16 +67,21 @@ namespace de.fhb.oll.transcripter
         /// Usage <c>Transcripter.exe [options] &lt;source file&gt;</c>
         /// </para>
         /// <para>
+        /// <c>--dashboard</c>, <c>-db</c>:
+        ///     Shows a detailed dashboard in default processing mode.
+        /// </para>
+        /// <para>
         /// <c>--confidence-test</c>, <c>-ct</c>:
-        ///     switches to confidence test mode
+        ///     Switches to confidence test mode.
         /// </para>
         /// <para>
         /// <c>--test-duration</c>, <c>-td &lt;seconds&gt;</c>:
-        ///     specifies the max time of confidence testing in seconds
+        ///     Specifies the max time of confidence testing in seconds.
         /// </para>
         /// <para>
-        /// <c>--progress-only</c>, <c>-po</c>:
-        ///     switches to normal processing with progress-only output
+        /// <c>--progress</c>, <c>-p</c>:
+        ///     Writes current progress as current position in audio stream to the standard output.
+        ///     (Has no affect, if <c>--dashboard</c>/<c>-d</c> is used.)
         /// </para>
         /// <para>
         /// <c>--target</c>, <c>-t &lt;target file&gt;</c>:
@@ -83,35 +90,25 @@ namespace de.fhb.oll.transcripter
         /// </remarks>
         static int Main(string[] args)
         {
-            if (args.Length <= 0)
+            var cla = new CommandLineArguments(args);
+            if (!cla.HasArguments)
             {
                 Console.WriteLine("You need to specify a filename.");
                 return -1;
             }
 
-            if (CheckArgumentSwitch(args, "-ct", "--confidence-test"))
-            {
-                procMode = ProcessingMode.ConfidenceTest;
-            }
-            if (CheckArgumentSwitch(args, "-po", "--progress-only"))
-            {
-                procMode = ProcessingMode.ProgressOnly;
-            }
+            procMode = cla.HasSwitch("-ct", "--confidence-test")
+                ? ProcessingMode.ConfidenceTest
+                : ProcessingMode.Default;
 
-            var testDurationStr = GetArgumentOption(args, "-td", "--test-duration");
-            if (testDurationStr != null)
-            {
-                float testDuration;
-                if (float.TryParse(testDurationStr, NumberStyles.Float, CultureInfo.InvariantCulture, out testDuration)
-                    && testDuration > 0)
-                {
-                    confidenceTestDuration = testDuration;
-                }
-            }
+            showDashboard = cla.HasSwitch("-db", "--dashboard");
+            showProgress = cla.HasSwitch("-p", "--progress");
 
-            sourceFile = args[args.Length - 1];
+            confidenceTestDuration = cla.GetFloatingPoint("-td", "--test-duration") ?? confidenceTestDuration;
+
+            sourceFile = cla.LastArgument;
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
-            targetFile = GetArgumentOption(args, "-t", "--target")
+            targetFile = cla.GetString("-t", "--target")
                 ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName);
             var outputPath = Path.GetDirectoryName(targetFile);
             if (outputPath != null && !Directory.Exists(outputPath))
@@ -125,7 +122,7 @@ namespace de.fhb.oll.transcripter
             resultNo = 0;
             exitEvent = new AutoResetEvent(false);
 
-            if (procMode == ProcessingMode.Default)
+            if (showDashboard)
             {
                 Console.WriteLine(inputName);
                 Console.WriteLine();
@@ -166,36 +163,6 @@ namespace de.fhb.oll.transcripter
             return exitWithError ? -1 : 0;
         }
 
-        private static bool CheckArgumentSwitch(string[] args, params string[] switchNames)
-        {
-            return switchNames.Any(args.Contains);
-        }
-
-        private static string GetArgumentOption(string[] args, params string[] argumentNames)
-        {
-            var pos = -1;
-            for (var i = 0; i < args.Length; i++)
-            {
-                if (argumentNames.Any(an => string.Equals(an, args[i])))
-                {
-                    pos = i;
-                    break;
-                }
-            }
-            return pos >= 0 && args.Length > ++pos ? args[++pos] : null;
-        }
-
-        private static void BeginWriterOutput()
-        {
-            outEdn.WriteLine("[");
-        }
-
-        private static void EndWriterOutput()
-        {
-            outEdn.WriteLine("]");
-            outEdn.Flush();
-        }
-
 #if CSV
         private static void WriteWordStats()
         {
@@ -220,14 +187,21 @@ namespace de.fhb.oll.transcripter
         {
             ProcessResult(e.Result);
 
-            if (procMode != ProcessingMode.ConfidenceTest)
+            if (procMode == ProcessingMode.Default)
             {
 #if CSV
                 WriteWordStats();
 #endif
                 WriteResult(e.Result);
 
+            }
+            if (showDashboard)
+            {
                 ShowResult(e.Result);
+            }
+            else if (showProgress)
+            {
+                ShowProgress(e.Result);
             }
 
             if (procMode == ProcessingMode.ConfidenceTest &&
@@ -236,6 +210,45 @@ namespace de.fhb.oll.transcripter
             {
                 engine.RecognizeAsyncCancel();
             }
+        }
+
+        static void RecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
+        {
+            if (showDashboard)
+            {
+                Console.Clear();
+                if (e.Error != null)
+                {
+                    Console.WriteLine("Error encountered, {0}: {1}",
+                        e.Error.GetType().Name, e.Error.Message);
+                }
+                if (procMode != ProcessingMode.ConfidenceTest && e.Cancelled)
+                {
+                    Console.WriteLine("Operation cancelled.");
+                }
+                if (e.InputStreamEnded)
+                {
+                    Console.WriteLine("End of stream encountered.");
+                }
+                Console.WriteLine("Speech recognition finished.");
+            }
+
+            exitWithError = e.Error != null;
+
+            exitEvent.Set();
+        }
+
+        #region EDN output
+
+        private static void BeginWriterOutput()
+        {
+            outEdn.WriteLine("[");
+        }
+
+        private static void EndWriterOutput()
+        {
+            outEdn.WriteLine("]");
+            outEdn.Flush();
         }
 
         private static void WriteResult(RecognitionResult result)
@@ -315,35 +328,12 @@ namespace de.fhb.oll.transcripter
             outEdn.WriteLine("{0}]", prefix);
         }
 
-        static void RecognizeCompletedHandler(object sender, RecognizeCompletedEventArgs e)
-        {
-            if (procMode == ProcessingMode.Default)
-            {
-                Console.Clear();
-                if (e.Error != null)
-                {
-                    Console.WriteLine("Error encountered, {0}: {1}",
-                        e.Error.GetType().Name, e.Error.Message);
-                }
-                if (e.Cancelled)
-                {
-                    Console.WriteLine("Operation cancelled.");
-                }
-                if (e.InputStreamEnded)
-                {
-                    Console.WriteLine("End of stream encountered.");
-                }
-                Console.WriteLine("Recognize complete.");
-            }
-
-            exitWithError = e.Error != null;
-
-            exitEvent.Set();
-        }
+        #endregion
 
         static void WriteConfidenceTestResults()
         {
             var fp = CultureInfo.InvariantCulture;
+            Console.WriteLine();
             Console.WriteLine("PhraseCount=" + phraseCount.ToString(fp));
             Console.WriteLine("PhraseConfidenceSum=" + phraseConfidenceSum.ToString(fp));
             Console.WriteLine("MaxPhraseConfidence=" + maxPhraseConfidence.ToString(fp));
@@ -355,10 +345,23 @@ namespace de.fhb.oll.transcripter
             Console.WriteLine("MeanWordConfidence=" + (wordCount > 0 ? wordConfidenceSum / wordCount : 0.0).ToString(fp));
             Console.WriteLine("MinWordConfidence=" + minWordConfidence.ToString(fp));
 
-            Console.WriteLine("BestPhraseConfidence=" + hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
+            // The best mean confidence of all occurences of a word.
+            Console.WriteLine("BestWordConfidence=" + hitlist.Values.OrderBy(ws => -ws.MeanConfidence).FirstOrDefault().MeanConfidence.ToString(fp));
         }
 
-        #region Preview Analytics
+        private static void ShowProgress(RecognitionResult result)
+        {
+            if (result.Audio == null) return;
+            var pos = result.Audio.AudioPosition;
+            Console.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "{0:###0}:{1:00}:{2:00}.{3:000}",
+                pos.Days * 24 + pos.Hours,
+                pos.Minutes,
+                pos.Seconds,
+                pos.Milliseconds));
+        }
+
+        #region Dashboard Analytics
 
         static void ProcessResult(RecognizedPhrase result)
         {
@@ -414,15 +417,6 @@ namespace de.fhb.oll.transcripter
         static void ShowResult(RecognitionResult result)
         {
             Console.Title = inputName;
-            if (procMode == ProcessingMode.ProgressOnly)
-            {
-                if (result.Audio != null)
-                {
-                    Console.WriteLine(result.Audio.AudioPosition.TotalSeconds
-                        .ToString(CultureInfo.InvariantCulture));
-                }
-                return;
-            }
             Console.SetWindowSize(100, 16 + GLOBAL_LIST_LENGTH + LOCAL_LIST_LENGTH + 6);
             Console.Clear();
             Console.WriteLine(inputName);
@@ -600,7 +594,6 @@ namespace de.fhb.oll.transcripter
     enum ProcessingMode
     {
         Default,
-        ProgressOnly,
         ConfidenceTest
     }
 }
