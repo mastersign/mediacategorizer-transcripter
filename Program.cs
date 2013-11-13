@@ -109,9 +109,10 @@ namespace de.fhb.oll.transcripter
             sourceFile = cla.LastArgument;
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
             targetFile = cla.GetString("-t", "--target")
-                ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName);
+                ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName + ".srr");
             var outputPath = Path.GetDirectoryName(targetFile);
-            if (outputPath != null && !Directory.Exists(outputPath))
+            if (procMode == ProcessingMode.Default && 
+                outputPath != null && !Directory.Exists(outputPath))
             {
                 Directory.CreateDirectory(outputPath);
             }
@@ -136,7 +137,7 @@ namespace de.fhb.oll.transcripter
 
             if (procMode != ProcessingMode.ConfidenceTest)
             {
-                outEdn = new StreamWriter(targetFile + ".srr", false, CLJ_OUTPUT_ENCODING);
+                outEdn = new StreamWriter(targetFile, false, CLJ_OUTPUT_ENCODING);
                 BeginWriterOutput();
             }
 
