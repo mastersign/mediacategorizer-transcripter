@@ -164,6 +164,19 @@ namespace de.fhb.oll.transcripter
             return exitWithError ? -1 : 0;
         }
 
+        private static void PrintSupportedFormats()
+        {
+            foreach (var af in new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE).RecognizerInfo.SupportedAudioFormats)
+            {
+                Console.WriteLine("EncodingFormat:   " + af.EncodingFormat);
+                Console.WriteLine("SamplesPerSecond: " + af.SamplesPerSecond);
+                Console.WriteLine("BitsPerSecond:    " + af.BitsPerSample);
+                Console.WriteLine("ChannelCount:     " + af.ChannelCount);
+                Console.WriteLine("BlockAlign:       " + af.BlockAlign);
+                Console.WriteLine();
+            }
+        }
+
 #if CSV
         private static void WriteWordStats()
         {
