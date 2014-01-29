@@ -1,9 +1,4 @@
-﻿//
-// Copyright (c) 2013 Tobias Kiertscher <kiertscher@fh-brandenburg.de>.
-// Alle Rechte vorbehalten.
-//
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -14,7 +9,7 @@ using System.Threading;
 
 namespace de.fhb.oll.transcripter
 {
-    class Program
+    static class Program
     {
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
         private const int MAX_ALTERNATES = 4;
