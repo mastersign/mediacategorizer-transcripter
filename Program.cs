@@ -1,9 +1,4 @@
-﻿//
-// Copyright (c) 2013 Tobias Kiertscher <kiertscher@fh-brandenburg.de>.
-// Alle Rechte vorbehalten.
-//
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -14,7 +9,7 @@ using System.Threading;
 
 namespace de.fhb.oll.transcripter
 {
-    class Program
+    static class Program
     {
         private static readonly CultureInfo INPUT_LANGUAGE_CULTURE = CultureInfo.GetCultureInfo("de-DE");
         private const int MAX_ALTERNATES = 4;
@@ -90,11 +85,28 @@ namespace de.fhb.oll.transcripter
         /// </remarks>
         static int Main(string[] args)
         {
+            try
+            {
+                if (ProcessArguments(args)) return -1;
+                Process();
+            }
+            catch (Exception exc)
+            {
+                Console.WriteLine(exc);
+                Console.WriteLine(exc.Message);
+                return -1;
+            }
+
+            return exitWithError ? -1 : 0;
+        }
+
+        private static bool ProcessArguments(string[] args)
+        {
             var cla = new CommandLineArguments(args);
             if (!cla.HasArguments)
             {
                 Console.WriteLine("You need to specify a filename.");
-                return -1;
+                return false;
             }
 
             procMode = cla.HasSwitch("-ct", "--confidence-test")
@@ -109,14 +121,18 @@ namespace de.fhb.oll.transcripter
             sourceFile = cla.LastArgument;
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
             targetFile = cla.GetString("-t", "--target")
-                ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName + ".srr");
+                         ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName + ".srr");
             var outputPath = Path.GetDirectoryName(targetFile);
-            if (procMode == ProcessingMode.Default && 
+            if (procMode == ProcessingMode.Default &&
                 outputPath != null && !Directory.Exists(outputPath))
             {
                 Directory.CreateDirectory(outputPath);
             }
+            return true;
+        }
 
+        private static void Process()
+        {
             hitlist = new Dictionary<string, WordStats>();
             phraseConfidenceSum = 0.0;
             phraseCount = 0;
@@ -133,6 +149,7 @@ namespace de.fhb.oll.transcripter
             using (outPhrases = new StreamWriter(targetFile + ".phrases.csv", false, CSV_OUTPUT_ENCODING))
             using (outWords = new StreamWriter(targetFile + ".words.csv", false, CSV_OUTPUT_ENCODING))
 #endif
+
             engine = new SpeechRecognitionEngine(INPUT_LANGUAGE_CULTURE);
 
             if (procMode != ProcessingMode.ConfidenceTest)
@@ -160,8 +177,6 @@ namespace de.fhb.oll.transcripter
             {
                 WriteConfidenceTestResults();
             }
-
-            return exitWithError ? -1 : 0;
         }
 
         private static void PrintSupportedFormats()
