@@ -87,7 +87,7 @@ namespace de.fhb.oll.transcripter
         {
             try
             {
-                if (ProcessArguments(args)) return -1;
+                if (!ProcessArguments(args)) return -1;
                 Process();
             }
             catch (Exception exc)
