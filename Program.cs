@@ -119,6 +119,11 @@ namespace de.fhb.oll.transcripter
             confidenceTestDuration = cla.GetFloatingPoint("-td", "--test-duration") ?? confidenceTestDuration;
 
             sourceFile = cla.LastArgument;
+            if (!File.Exists(sourceFile))
+            {
+                Console.WriteLine("Audio file not found: " + sourceFile);
+                return false;
+            }
             inputName = Path.GetFileNameWithoutExtension(sourceFile) ?? "unknown";
             targetFile = cla.GetString("-t", "--target")
                          ?? Path.Combine(Path.GetDirectoryName(sourceFile) ?? "", "transcript", inputName + ".srr");
